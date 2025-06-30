@@ -1,0 +1,197 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --matrix-green: #00FF41;
+  --matrix-dark-green: #00CC33;
+  --matrix-dim-green: #009900;
+  --warning-orange: #FF6B35;
+  --neutral-black: #0D0D0D;
+  --console-gray: #1A1A1A;
+  --console-dark: #111111;
+  --text-dim: #009900;
+  --success: #00FF41;
+  --error: #FF6B35;
+  --info: #00CCFF;
+  --border-green: #00AA33;
+  --glow-green: #00FF4144;
+}
+
+/* Base Matrix styles */
+.matrix-body {
+  background: var(--neutral-black);
+  color: var(--matrix-green);
+  font-family: 'JetBrains Mono', monospace;
+  overflow-x: hidden;
+}
+
+/* CRT Effect */
+.crt-screen {
+  position: relative;
+  background: var(--console-gray);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.crt-screen::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 255, 65, 0.03) 2px,
+    rgba(0, 255, 65, 0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 10;
+}
+
+.crt-screen::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.3) 100%);
+  pointer-events: none;
+  z-index: 11;
+}
+
+/* Text glow effect */
+.matrix-glow {
+  text-shadow: 0 0 5px var(--matrix-green), 0 0 10px var(--matrix-green), 0 0 15px var(--matrix-green);
+}
+
+.matrix-glow-dim {
+  text-shadow: 0 0 3px var(--matrix-dim-green);
+}
+
+/* Cursor animation */
+.cursor-blink {
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Button styles */
+.matrix-button {
+  background: transparent;
+  border: 1px solid var(--matrix-green);
+  color: var(--matrix-green);
+  font-family: 'JetBrains Mono', monospace;
+  transition: all 0.3s ease;
+}
+
+.matrix-button:hover {
+  background: var(--glow-green);
+  box-shadow: 0 0 10px var(--matrix-green);
+  text-shadow: 0 0 5px var(--matrix-green);
+}
+
+/* Scrollbar styling */
+.matrix-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.matrix-scrollbar::-webkit-scrollbar-track {
+  background: var(--console-dark);
+}
+
+.matrix-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--matrix-dim-green);
+  border-radius: 4px;
+}
+
+.matrix-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--matrix-green);
+}
+
+/* Typography */
+.matrix-headline {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: var(--matrix-green);
+}
+
+.matrix-body-text {
+  font-family: 'Source Code Pro', monospace;
+  font-weight: 400;
+  color: var(--matrix-green);
+}
+
+.terminal-text {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* Grid layout */
+.world-grid {
+  background-image: 
+    linear-gradient(rgba(0, 255, 65, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 65, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Command highlighting */
+.command-highlight {
+  background: rgba(0, 255, 65, 0.1);
+  border-left: 2px solid var(--matrix-green);
+  padding-left: 8px;
+}
+
+/* Loading animation */
+.matrix-loading {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Agent status indicators */
+.agent-active {
+  animation: agent-pulse 2s infinite;
+}
+
+@keyframes agent-pulse {
+  0%, 100% { 
+    box-shadow: 0 0 5px var(--matrix-green);
+  }
+  50% { 
+    box-shadow: 0 0 15px var(--matrix-green), 0 0 25px var(--matrix-green);
+  }
+}
+
+/* Modal backdrop */
+.matrix-backdrop {
+  background: rgba(13, 13, 13, 0.8);
+  backdrop-filter: blur(4px);
+}
+
+/* Notification styles */
+.notification-success {
+  border-left: 4px solid var(--success);
+  background: rgba(0, 255, 65, 0.1);
+}
+
+.notification-error {
+  border-left: 4px solid var(--error);
+  background: rgba(255, 107, 53, 0.1);
+}
+
+.notification-info {
+  border-left: 4px solid var(--info);
+  background: rgba(0, 204, 255, 0.1);
+}
