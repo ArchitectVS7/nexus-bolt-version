@@ -313,7 +313,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   
   saveToSupabase: async () => {
-    if (!isSupabaseEnabled || !get().user) return;
+    if (!isSupabaseEnabled || !get().user) {
+      console.log('Supabase save skipped: not enabled or no user');
+      return;
+    }
     
     try {
       const { gameState, customCommands, user } = get();
@@ -354,13 +357,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
         updated_at: new Date().toISOString()
       });
       
+      console.log('Successfully saved data to Supabase');
     } catch (error) {
       console.error('Supabase save error:', error);
+      get().addNotification({
+        type: 'warning',
+        title: 'Save Warning',
+        message: 'Failed to save data to cloud. Progress saved locally.',
+        duration: 5000
+      });
     }
   },
   
   loadFromSupabase: async () => {
-    if (!isSupabaseEnabled || !get().user) return;
+    if (!isSupabaseEnabled || !get().user) {
+      console.log('Supabase load skipped: not enabled or no user');
+      return;
+    }
     
     try {
       const { user } = get();
@@ -398,6 +411,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             }
           }
         }));
+        console.log('Loaded profile from Supabase');
       }
       
       if (commands) {
@@ -406,6 +420,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           isCustom: true,
           createdAt: new Date(cmd.created_at)
         })) });
+        console.log(`Loaded ${commands.length} custom commands from Supabase`);
       }
       
       if (worldState) {
@@ -417,10 +432,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
             worldSize: worldState.world_size || state.gameState.worldSize
           }
         }));
+        console.log('Loaded world state from Supabase');
       }
+      
+      get().addNotification({
+        type: 'success',
+        title: 'Data Loaded',
+        message: 'Successfully loaded your progress from the cloud.',
+        duration: 3000
+      });
       
     } catch (error) {
       console.error('Supabase load error:', error);
+      get().addNotification({
+        type: 'info',
+        title: 'Load Notice',
+        message: 'Using local data. Cloud sync unavailable.',
+        duration: 3000
+      });
     }
   },
   

@@ -1,9 +1,10 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Wifi, Shield, Activity, Clock, User, LogOut, Volume2, VolumeX } from 'lucide-react';
+import { Wifi, Shield, Activity, Clock, User, LogOut, Volume2, VolumeX, Database } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { useAuth } from '../../hooks/useAuth';
+import { isSupabaseEnabled } from '../../lib/supabase';
 
 const MatrixHeader: React.FC = () => {
   const location = useLocation();
@@ -22,6 +23,12 @@ const MatrixHeader: React.FC = () => {
         return 'Command Library';
       case '/profile':
         return 'User Profile';
+      case '/challenges':
+        return 'Challenge System';
+      case '/builder':
+        return 'World Editor';
+      case '/programming':
+        return 'Agent Programming';
       default:
         return 'Nexus World Builder';
     }
@@ -39,6 +46,12 @@ const MatrixHeader: React.FC = () => {
         return 'Browse and manage command repository';
       case '/profile':
         return 'View statistics and achievements';
+      case '/challenges':
+        return 'Complete missions and earn rewards';
+      case '/builder':
+        return 'Design and build custom worlds';
+      case '/programming':
+        return 'Create visual scripts for agents';
       default:
         return 'Matrix-based world building system';
     }
@@ -93,6 +106,17 @@ const MatrixHeader: React.FC = () => {
               </button>
             </div>
           )}
+          
+          {/* Database Status */}
+          <div className="flex items-center space-x-2">
+            <Database className={`w-4 h-4 ${isSupabaseEnabled ? 'text-matrix-green' : 'text-matrix-dim-green'}`} />
+            <span className="text-sm">
+              <span className="text-matrix-dim-green">Database:</span>
+              <span className={`ml-1 ${isSupabaseEnabled ? 'text-matrix-green matrix-glow' : 'text-matrix-dim-green'}`}>
+                {isSupabaseEnabled ? 'ONLINE' : 'OFFLINE'}
+              </span>
+            </span>
+          </div>
           
           {/* Audio Toggle */}
           <button

@@ -190,11 +190,13 @@ VITE_OPENAI_API_KEY=your_openai_api_key
 VITE_ENABLE_AUDIO=true
 ```
 
-**Note**: The game works fully offline without these configurations, using localStorage and pattern-matching for commands.
+**Note**: The game works fully offline without these configurations, using localStorage and pattern-matching for commands. Invalid or missing Supabase URLs will automatically fall back to offline mode.
 
 ### Supabase Setup
 
-**REQUIRED** for v2.5 features. To set up Supabase:
+**REQUIRED** for v2.5 features. The application includes robust validation and will gracefully fall back to offline mode if Supabase is not properly configured.
+
+To set up Supabase:
 
 1. Create a new Supabase project
 2. Run the following SQL to create all required tables:
