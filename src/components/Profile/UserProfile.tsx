@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Trophy, Target, Clock, TrendingUp, Award, Settings, Download } from 'lucide-react';
+import { User, Trophy, Target, Clock, TrendingUp, Award, Settings, Download, CheckCircle, AlertCircle, Zap } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 
 const UserProfile: React.FC = () => {
-  const { gameState, customCommands, commandHistory } = useGameStore();
+  const { gameState, customCommands, commandHistory, getV25Status } = useGameStore();
   const [activeTab, setActiveTab] = useState<'overview' | 'achievements' | 'stats' | 'settings'>('overview');
+  
+  const v25Status = getV25Status();
 
   const stats = {
     totalCommands: commandHistory.length,
@@ -152,6 +154,71 @@ const UserProfile: React.FC = () => {
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {/* v2.5 Feature Status */}
+              <div className="bg-console-dark border border-border-green rounded-lg p-6">
+                <h3 className="text-lg font-bold text-matrix-green mb-4 flex items-center space-x-2">
+                  <Zap className="w-5 h-5" />
+                  <span>v2.5 Feature Status</span>
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div className="flex items-center justify-between p-3 bg-console-gray rounded">
+                    <span className="text-matrix-dim-green">Advanced NLP</span>
+                    <div className="flex items-center space-x-2">
+                      {v25Status.llmEnabled ? (
+                        <CheckCircle className="w-4 h-4 text-matrix-green" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-warning-orange" />
+                      )}
+                      <span className={v25Status.llmEnabled ? 'text-matrix-green' : 'text-warning-orange'}>
+                        {v25Status.llmEnabled ? 'ACTIVE' : 'OFFLINE'}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 bg-console-gray rounded">
+                    <span className="text-matrix-dim-green">Cloud Sync</span>
+                    <div className="flex items-center space-x-2">
+                      {v25Status.supabaseEnabled ? (
+                        <CheckCircle className="w-4 h-4 text-matrix-green" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-warning-orange" />
+                      )}
+                      <span className={v25Status.supabaseEnabled ? 'text-matrix-green' : 'text-warning-orange'}>
+                        {v25Status.supabaseEnabled ? 'ONLINE' : 'OFFLINE'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-matrix-dim-green">Overall Completion</span>
+                    <span className="text-matrix-green">{v25Status.completionPercentage}%</span>
+                  </div>
+                  <div className="w-full bg-console-gray rounded-full h-3">
+                    <div 
+                      className="bg-matrix-green h-3 rounded-full transition-all"
+                      style={{ width: `${v25Status.completionPercentage}%` }}
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <h4 className="text-sm font-medium text-matrix-green mb-2">Active Features:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {v25Status.featuresActive.map((feature, index) => (
+                      <span
+                        key={index}
+                        className="px-2 py-1 bg-glow-green text-xs text-matrix-green border border-matrix-green rounded"
+                      >
+                        {feature}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               {/* Quick Stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-console-dark border border-border-green rounded-lg p-4">

@@ -1,15 +1,26 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Wifi, Shield, Activity, Clock, User, LogOut, Volume2, VolumeX, Database } from 'lucide-react';
+import { Wifi, Shield, Activity, Clock, User, LogOut, Volume2, VolumeX, Database, CheckCircle, AlertCircle } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { useAuth } from '../../hooks/useAuth';
-import { isSupabaseEnabled } from '../../lib/supabase';
+import { isSupabaseEnabled, checkSupabaseConnection } from '../../lib/supabase';
+import { llmParser } from '../../lib/llm';
 
 const MatrixHeader: React.FC = () => {
   const location = useLocation();
   const { gameState, isExecuting, audioEnabled, toggleAudio } = useGameStore();
   const { user, signOut } = useAuth();
+  const [dbConnected, setDbConnected] = React.useState<boolean | null>(null);
+  
+  // Check database connection on mount
+  React.useEffect(() => {
+    if (isSupabaseEnabled) {
+      checkSupabaseConnection().then(setDbConnected);
+    } else {
+      setDbConnected(false);
+    }
+  }, []);
   
   const getPageTitle = () => {
     switch (location.pathname) {
@@ -109,11 +120,34 @@ const MatrixHeader: React.FC = () => {
           
           {/* Database Status */}
           <div className="flex items-center space-x-2">
-            <Database className={`w-4 h-4 ${isSupabaseEnabled ? 'text-matrix-green' : 'text-matrix-dim-green'}`} />
+            <div className="flex items-center space-x-1">
+              <Database className={`w-4 h-4 ${dbConnected ? 'text-matrix-green' : 'text-matrix-dim-green'}`} />
+              {dbConnected === true && <CheckCircle className="w-3 h-3 text-matrix-green" />}
+              {dbConnected === false && <AlertCircle className="w-3 h-3 text-warning-orange" />}
+            </div>
             <span className="text-sm">
               <span className="text-matrix-dim-green">Database:</span>
-              <span className={`ml-1 ${isSupabaseEnabled ? 'text-matrix-green matrix-glow' : 'text-matrix-dim-green'}`}>
-                {isSupabaseEnabled ? 'ONLINE' : 'OFFLINE'}
+              <span className={`ml-1 ${dbConnected ? 'text-matrix-green matrix-glow' : 'text-matrix-dim-green'}`}>
+                {dbConnected === null ? 'CHECKING...' : dbConnected ? 'ONLINE' : 'OFFLINE'}
+              </span>
+            </span>
+          </div>
+          
+          {/* LLM Status */}
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1">
+              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                llmParser.isLLMEnabled() ? 'border-matrix-green text-matrix-green' : 'border-matrix-dim-green text-matrix-dim-green'
+              }`}>
+                <span className="text-xs font-bold">AI</span>
+              </div>
+              {llmParser.isLLMEnabled() && <CheckCircle className="w-3 h-3 text-matrix-green" />}
+              {!llmParser.isLLMEnabled() && <AlertCircle className="w-3 h-3 text-warning-orange" />}
+            </div>
+            <span className="text-sm">
+              <span className="text-matrix-dim-green">LLM:</span>
+              <span className={`ml-1 ${llmParser.isLLMEnabled() ? 'text-matrix-green matrix-glow' : 'text-matrix-dim-green'}`}>
+                {llmParser.isLLMEnabled() ? 'ACTIVE' : 'OFFLINE'}
               </span>
             </span>
           </div>
