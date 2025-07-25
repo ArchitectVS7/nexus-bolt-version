@@ -105,7 +105,7 @@ Tutorial
 
 ### Medium Term (v2.5)
 - [ ] **Advanced Natural Language Processing**: Enhanced LLM integration with context awareness
-- [ ] **Multiplayer Mode**: Shared worlds with multiple operators
+- [ ] **AI-Generated Content**: Procedural world generation and dynamic events
 - [ ] **Agent Programming**: Visual scripting interface for complex agent behaviors
 - [ ] **World Editor**: Drag-and-drop world building tools
 - [ ] **Challenge System**: Structured missions and objectives
@@ -113,9 +113,8 @@ Tutorial
 ### Long Term (v3.0)
 - [ ] **3D Visualization**: Upgrade to Three.js for immersive 3D world view
 - [ ] **VR Support**: Virtual reality interface for world exploration
-- [ ] **Blockchain Integration**: NFT agents and decentralized world ownership
-- [ ] **AI-Generated Content**: Procedural world generation and dynamic events
 - [ ] **Mobile App**: Native iOS/Android companion app
+- [ ] **Multiplayer Mode**: Shared worlds with multiple operators
 
 ## 🏗 Architecture
 
