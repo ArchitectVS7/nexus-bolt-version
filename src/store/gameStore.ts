@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { Agent, Command, GameState, TerminalLine, Notification } from '../types';
+import { Agent, Command, GameState, TerminalLine, Notification, WorldObject } from '../types';
+import { supabase, isSupabaseEnabled } from '../lib/supabase';
+import { audioManager } from '../lib/audio';
 
 interface GameStore {
   // Game State
@@ -7,6 +9,7 @@ interface GameStore {
   terminalLines: TerminalLine[];
   currentInput: string;
   isExecuting: boolean;
+  user: any;
   
   // Commands
   commands: Command[];
@@ -20,6 +23,7 @@ interface GameStore {
   activeRoute: string;
   selectedAgent: Agent | null;
   sidebarCollapsed: boolean;
+  audioEnabled: boolean;
   
   // Actions
   setCurrentInput: (input: string) => void;
@@ -33,6 +37,11 @@ interface GameStore {
   addCustomCommand: (command: Omit<Command, 'id' | 'createdAt'>) => void;
   toggleSidebar: () => void;
   setActiveRoute: (route: string) => void;
+  setUser: (user: any) => void;
+  toggleAudio: () => void;
+  saveToSupabase: () => Promise<void>;
+  loadFromSupabase: () => Promise<void>;
+  interactWithObject: (objectId: string) => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -40,7 +49,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
   gameState: {
     agents: [],
     worldSize: { width: 50, height: 50 },
-    objects: [],
+    objects: [
+      // Add some default world objects
+      { id: 'data1', type: 'datanode', position: { x: 10, y: 10 }, properties: { value: 100 }, isCollectable: true },
+      { id: 'data2', type: 'datanode', position: { x: 40, y: 15 }, properties: { value: 150 }, isCollectable: true },
+      { id: 'terminal1', type: 'terminalnode', position: { x: 25, y: 25 }, properties: { active: true }, isActivatable: true },
+      { id: 'obstacle1', type: 'obstacle', position: { x: 20, y: 20 }, properties: {}, isBlocking: true },
+      { id: 'obstacle2', type: 'obstacle', position: { x: 30, y: 30 }, properties: {}, isBlocking: true },
+      { id: 'obstacle3', type: 'obstacle', position: { x: 15, y: 35 }, properties: {}, isBlocking: true },
+    ] as WorldObject[],
     playerStats: {
       score: 0,
       commandsExecuted: 0,
@@ -71,6 +88,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   ],
   currentInput: '',
   isExecuting: false,
+  user: null,
   
   commands: [
     {
@@ -81,7 +99,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       parameters: [
         { name: 'count', type: 'number', required: true, description: 'Number of agents to deploy' },
         { name: 'location', type: 'string', required: true, description: 'Starting location' },
-        { name: 'behavior', type: 'string', required: false, defaultValue: 'patrol', description: 'Agent behavior pattern' },
+        { name: 'behavior', type: 'string', required: false, defaultValue: 'patrol', description: 'Agent behavior: patrol, scout, guard, gather, guardArea' },
       ],
       effects: [
         { type: 'create_agent', target: 'world', action: 'spawn', parameters: {} },
@@ -116,6 +134,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   activeRoute: '/terminal',
   selectedAgent: null,
   sidebarCollapsed: false,
+  audioEnabled: true,
   
   // Actions
   setCurrentInput: (input) => set({ currentInput: input }),
@@ -124,6 +143,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { addTerminalLine, addNotification } = get();
     
     set({ isExecuting: true });
+    
+    // Play command sound
+    audioManager.playSound('command', 0.3);
     
     // Add input to terminal
     addTerminalLine({
@@ -156,6 +178,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         duration: 3000,
       });
       
+      // Play success sound
+      audioManager.playSound('success', 0.4);
+      
       // Update game state based on command
       if (result.stateChanges) {
         set((state) => ({
@@ -177,9 +202,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
         message: result.output,
         duration: 5000,
       });
+      
+      // Play error sound
+      audioManager.playSound('error', 0.4);
     }
     
     set({ isExecuting: false, currentInput: '' });
+    
+    // Auto-save to Supabase if enabled
+    if (isSupabaseEnabled && get().user) {
+      get().saveToSupabase();
+    }
   },
   
   addTerminalLine: (line) => set((state) => ({
@@ -250,6 +283,181 @@ export const useGameStore = create<GameStore>((set, get) => ({
   })),
   
   setActiveRoute: (route) => set({ activeRoute: route }),
+  
+  setUser: (user) => set({ user }),
+  
+  toggleAudio: () => {
+    const newState = !get().audioEnabled;
+    audioManager.setEnabled(newState);
+    set({ audioEnabled: newState });
+  },
+  
+  saveToSupabase: async () => {
+    if (!isSupabaseEnabled || !get().user) return;
+    
+    try {
+      const { gameState, customCommands, user } = get();
+      
+      // Save profile
+      await supabase!.from('profiles').upsert({
+        user_id: user.id,
+        username: user.user_metadata?.username || user.email,
+        score: gameState.playerStats.score,
+        level: gameState.playerStats.level,
+        commands_executed: gameState.playerStats.commandsExecuted,
+        agents_deployed: gameState.playerStats.agentsDeployed,
+        achievements: gameState.playerStats.achievements,
+        updated_at: new Date().toISOString()
+      });
+      
+      // Save custom commands
+      for (const command of customCommands) {
+        await supabase!.from('custom_commands').upsert({
+          id: command.id,
+          user_id: user.id,
+          name: command.name,
+          syntax: command.syntax,
+          description: command.description,
+          parameters: command.parameters,
+          effects: command.effects,
+          category: command.category,
+          updated_at: new Date().toISOString()
+        });
+      }
+      
+      // Save world state
+      await supabase!.from('world_states').upsert({
+        user_id: user.id,
+        agents: gameState.agents,
+        objects: gameState.objects,
+        world_size: gameState.worldSize,
+        updated_at: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('Supabase save error:', error);
+    }
+  },
+  
+  loadFromSupabase: async () => {
+    if (!isSupabaseEnabled || !get().user) return;
+    
+    try {
+      const { user } = get();
+      
+      // Load profile
+      const { data: profile } = await supabase!
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      
+      // Load custom commands
+      const { data: commands } = await supabase!
+        .from('custom_commands')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      // Load world state
+      const { data: worldState } = await supabase!
+        .from('world_states')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (profile) {
+        set((state) => ({
+          gameState: {
+            ...state.gameState,
+            playerStats: {
+              score: profile.score,
+              level: profile.level,
+              commandsExecuted: profile.commands_executed,
+              agentsDeployed: profile.agents_deployed,
+              achievements: profile.achievements
+            }
+          }
+        }));
+      }
+      
+      if (commands) {
+        set({ customCommands: commands.map(cmd => ({
+          ...cmd,
+          isCustom: true,
+          createdAt: new Date(cmd.created_at)
+        })) });
+      }
+      
+      if (worldState) {
+        set((state) => ({
+          gameState: {
+            ...state.gameState,
+            agents: worldState.agents || [],
+            objects: worldState.objects || state.gameState.objects,
+            worldSize: worldState.world_size || state.gameState.worldSize
+          }
+        }));
+      }
+      
+    } catch (error) {
+      console.error('Supabase load error:', error);
+    }
+  },
+  
+  interactWithObject: (objectId: string) => {
+    const { gameState } = get();
+    const object = gameState.objects.find(obj => obj.id === objectId);
+    
+    if (!object) return;
+    
+    let message = '';
+    let scoreGain = 0;
+    
+    if (object.type === 'datanode' && object.isCollectable) {
+      message = `Collected data node! Gained ${object.properties.value} points.`;
+      scoreGain = object.properties.value;
+      
+      // Remove the collected object
+      set((state) => ({
+        gameState: {
+          ...state.gameState,
+          objects: state.gameState.objects.filter(obj => obj.id !== objectId),
+          playerStats: {
+            ...state.gameState.playerStats,
+            score: state.gameState.playerStats.score + scoreGain
+          }
+        }
+      }));
+      
+    } else if (object.type === 'terminalnode' && object.isActivatable) {
+      message = 'Terminal node activated! System access granted.';
+      scoreGain = 50;
+      
+      set((state) => ({
+        gameState: {
+          ...state.gameState,
+          playerStats: {
+            ...state.gameState.playerStats,
+            score: state.gameState.playerStats.score + scoreGain
+          }
+        }
+      }));
+      
+    } else if (object.type === 'obstacle') {
+      message = 'Obstacle blocks movement. Deploy agents to navigate around it.';
+    }
+    
+    if (message) {
+      get().addTerminalLine({
+        type: 'system',
+        content: message
+      });
+      
+      if (scoreGain > 0) {
+        audioManager.playSound('success', 0.3);
+      }
+    }
+  }
 }));
 
 // Command parsing and execution logic
@@ -332,24 +540,92 @@ SYSTEM STATUS:
     const location = match[2] || 'center';
     const behavior = match[3] || 'patrol';
     
+    // Validate behavior
+    const validBehaviors = ['patrol', 'scout', 'guard', 'gather', 'guardarea'];
+    if (!validBehaviors.includes(behavior.toLowerCase())) {
+      return {
+        success: false,
+        output: `Invalid behavior: ${behavior}. Valid behaviors: ${validBehaviors.join(', ')}`
+      };
+    }
+    
     const agents: Agent[] = [];
+    const store = useGameStore.getState();
+    
     for (let i = 0; i < count; i++) {
-      const baseX = location === 'center' ? 25 : Math.floor(Math.random() * 50);
-      const baseY = location === 'center' ? 25 : Math.floor(Math.random() * 50);
+      let baseX, baseY;
+      
+      // Handle different location types
+      if (location === 'center') {
+        baseX = 25; baseY = 25;
+      } else if (location === 'north') {
+        baseX = 25; baseY = 5;
+      } else if (location === 'south') {
+        baseX = 25; baseY = 45;
+      } else if (location === 'east') {
+        baseX = 45; baseY = 25;
+      } else if (location === 'west') {
+        baseX = 5; baseY = 25;
+      } else if (location === 'northeast') {
+        baseX = 40; baseY = 10;
+      } else if (location === 'northwest') {
+        baseX = 10; baseY = 10;
+      } else if (location === 'southeast') {
+        baseX = 40; baseY = 40;
+      } else if (location === 'southwest') {
+        baseX = 10; baseY = 40;
+      } else {
+        // Try to parse as coordinates
+        const coords = location.match(/(\d+)\s+(\d+)/);
+        if (coords) {
+          baseX = parseInt(coords[1]);
+          baseY = parseInt(coords[2]);
+        } else {
+          baseX = Math.floor(Math.random() * 50);
+          baseY = Math.floor(Math.random() * 50);
+        }
+      }
+      
+      // Ensure position is not blocked by obstacles
+      let finalX = baseX + Math.floor(Math.random() * 5) - 2;
+      let finalY = baseY + Math.floor(Math.random() * 5) - 2;
+      
+      // Check for obstacles
+      const isBlocked = store.gameState.objects.some(obj => 
+        obj.isBlocking && obj.position.x === finalX && obj.position.y === finalY
+      );
+      
+      if (isBlocked) {
+        // Find nearby free position
+        for (let attempts = 0; attempts < 10; attempts++) {
+          finalX = baseX + Math.floor(Math.random() * 10) - 5;
+          finalY = baseY + Math.floor(Math.random() * 10) - 5;
+          
+          finalX = Math.max(0, Math.min(49, finalX));
+          finalY = Math.max(0, Math.min(49, finalY));
+          
+          const stillBlocked = store.gameState.objects.some(obj => 
+            obj.isBlocking && obj.position.x === finalX && obj.position.y === finalY
+          );
+          
+          if (!stillBlocked) break;
+        }
+      }
       
       agents.push({
         id: `agent_${Date.now()}_${i}`,
         name: `Agent-${Date.now()}-${i}`,
         position: { 
-          x: baseX + Math.floor(Math.random() * 5) - 2, 
-          y: baseY + Math.floor(Math.random() * 5) - 2 
+          x: Math.max(0, Math.min(49, finalX)), 
+          y: Math.max(0, Math.min(49, finalY))
         },
         status: 'active',
-        behavior,
+        behavior: behavior.toLowerCase(),
         commands: [],
         health: 100,
         energy: 100,
         lastAction: 'deployed',
+        inventory: [],
         createdAt: new Date(),
       });
     }
@@ -359,7 +635,7 @@ SYSTEM STATUS:
       output: `Successfully deployed ${count} agent(s) with ${behavior} behavior at ${location}.`,
       points: count * 10,
       stateChanges: {
-        agents: [...useGameStore.getState().gameState.agents, ...agents],
+        agents: [...store.gameState.agents, ...agents],
       },
     };
   }
@@ -385,12 +661,28 @@ SYSTEM STATUS:
       return distance <= radius;
     });
     
+    const nearbyObjects = store.gameState.objects.filter(obj => {
+      const distance = Math.sqrt(
+        Math.pow(obj.position.x - x, 2) + Math.pow(obj.position.y - y, 2)
+      );
+      return distance <= radius;
+    });
+    
     let scanResult = `Scan complete. Area: (${x}, ${y}) Radius: ${radius}\n`;
     scanResult += `Agents found: ${nearbyAgents.length}\n`;
+    scanResult += `Objects found: ${nearbyObjects.length}\n`;
     
     if (nearbyAgents.length > 0) {
+      scanResult += '\nAgents:\n';
       scanResult += nearbyAgents.map(agent => 
-        `  ${agent.id}: ${agent.name} at (${agent.position.x}, ${agent.position.y})`
+        `  ${agent.id}: ${agent.name} [${agent.behavior}] at (${agent.position.x}, ${agent.position.y})`
+      ).join('\n');
+    }
+    
+    if (nearbyObjects.length > 0) {
+      scanResult += '\nObjects:\n';
+      scanResult += nearbyObjects.map(obj => 
+        `  ${obj.type} at (${obj.position.x}, ${obj.position.y})`
       ).join('\n');
     }
     

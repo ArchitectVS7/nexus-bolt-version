@@ -2,12 +2,14 @@ export interface Agent {
   id: string;
   name: string;
   position: { x: number; y: number };
-  status: 'idle' | 'active' | 'executing' | 'error';
+  status: 'idle' | 'active' | 'executing' | 'error' | 'moving' | 'gathering';
   behavior: string;
   commands: string[];
   health: number;
   energy: number;
   lastAction: string;
+  target?: { x: number; y: number };
+  inventory: string[];
   createdAt: Date;
 }
 
@@ -48,9 +50,12 @@ export interface GameState {
 
 export interface WorldObject {
   id: string;
-  type: 'wall' | 'data' | 'terminal' | 'portal';
+  type: 'wall' | 'datanode' | 'terminalnode' | 'obstacle' | 'portal';
   position: { x: number; y: number };
   properties: Record<string, any>;
+  isCollectable?: boolean;
+  isActivatable?: boolean;
+  isBlocking?: boolean;
 }
 
 export interface PlayerStats {
@@ -93,4 +98,22 @@ export interface Notification {
   message: string;
   duration?: number;
   timestamp: Date;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  username?: string;
+}
+
+export interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface CommandSuggestion {
+  command: string;
+  description: string;
+  confidence: number;
 }
