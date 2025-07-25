@@ -81,10 +81,10 @@ Tutorial
 ## 🔌 External Connections
 
 ### Current Status
-- **Database**: Supabase integration available (falls back to localStorage if not configured)
-- **LLM Integration**: OpenAI API integration for natural language command parsing
+- **Database**: ⚠️ **Supabase Required** - User authentication, data persistence, challenges, world templates
+- **LLM Integration**: ⚠️ **OpenAI API Required** - Advanced natural language processing with session memory
 - **MCP (Model Context Protocol)**: Not implemented
-- **External APIs**: OpenAI API for command parsing (optional)
+- **External APIs**: OpenAI GPT-3.5-turbo for enhanced command parsing
 
 ### Planned Integrations
 - **WebSocket**: For real-time multiplayer functionality
@@ -95,20 +95,20 @@ Tutorial
 ## 🎯 Future Improvements
 
 ### Short Term (v2.2)
-- [x] **Persistent Storage**: Integrate Supabase for user accounts and data persistence
-- [x] **Enhanced Agent AI**: More sophisticated agent behaviors and decision-making
-- [x] **World Objects**: Interactive elements like data nodes, terminals, and obstacles
-- [x] **Command Validation**: Real-time syntax checking and parameter validation
-- [x] **Audio System**: Matrix-style sound effects and ambient audio
-- [x] **LLM Integration**: Natural language command parsing with OpenAI/Claude API
-- [x] **Test Suite**: Comprehensive testing with Vitest and React Testing Library
+- ✅ **Persistent Storage**: Integrate Supabase for user accounts and data persistence
+- ✅ **Enhanced Agent AI**: More sophisticated agent behaviors and decision-making
+- ✅ **World Objects**: Interactive elements like data nodes, terminals, and obstacles
+- ✅ **Command Validation**: Real-time syntax checking and parameter validation
+- ✅ **Audio System**: Matrix-style sound effects and ambient audio
+- ✅ **LLM Integration**: Natural language command parsing with OpenAI/Claude API
+- ✅ **Test Suite**: Comprehensive testing with Vitest and React Testing Library
 
 ### Medium Term (v2.5)
-- [ ] **Advanced Natural Language Processing**: Enhanced LLM integration with context awareness
-- [ ] **AI-Generated Content**: Procedural world generation and dynamic events
-- [ ] **Agent Programming**: Visual scripting interface for complex agent behaviors
-- [ ] **World Editor**: Drag-and-drop world building tools
-- [ ] **Challenge System**: Structured missions and objectives
+- ✅ **Advanced Natural Language Processing**: Enhanced LLM integration with context awareness
+- ✅ **AI-Generated Content**: Procedural world generation and dynamic events
+- ✅ **Agent Programming**: Visual scripting interface for complex agent behaviors
+- ✅ **World Editor**: Drag-and-drop world building tools
+- ✅ **Challenge System**: Structured missions and objectives
 
 ### Long Term (v3.0)
 - [ ] **3D Visualization**: Upgrade to Three.js for immersive 3D world view
@@ -179,11 +179,11 @@ npm run test:ui
 To enable all features, configure these environment variables in `.env.local`:
 
 ```env
-# Supabase (for persistent storage)
+# Supabase (REQUIRED for v2.5 features)
 VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
-# OpenAI (for LLM command parsing)
+# OpenAI (REQUIRED for advanced LLM features)
 VITE_OPENAI_API_KEY=your_openai_api_key
 
 # Audio (optional)
@@ -194,10 +194,10 @@ VITE_ENABLE_AUDIO=true
 
 ### Supabase Setup
 
-If you want to enable persistent storage:
+**REQUIRED** for v2.5 features. To set up Supabase:
 
 1. Create a new Supabase project
-2. Run the following SQL to create required tables:
+2. Run the following SQL to create all required tables:
 
 ```sql
 -- Create profiles table
@@ -239,10 +239,65 @@ CREATE TABLE world_states (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Create challenges table
+CREATE TABLE challenges (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  objectives JSONB DEFAULT '[]',
+  reward JSONB DEFAULT '{}',
+  difficulty TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create world_templates table
+CREATE TABLE world_templates (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  size JSONB DEFAULT '{"width": 50, "height": 50}',
+  objects JSONB DEFAULT '[]',
+  spawn_points JSONB DEFAULT '[]',
+  difficulty INTEGER DEFAULT 1,
+  created_by UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  is_public BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create agent_scripts table
+CREATE TABLE agent_scripts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  blocks JSONB DEFAULT '[]',
+  triggers JSONB DEFAULT '[]',
+  variables JSONB DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create llm_sessions table
+CREATE TABLE llm_sessions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  messages JSONB DEFAULT '[]',
+  context JSONB DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Enable RLS
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE custom_commands ENABLE ROW LEVEL SECURITY;
 ALTER TABLE world_states ENABLE ROW LEVEL SECURITY;
+ALTER TABLE challenges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE world_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_scripts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE llm_sessions ENABLE ROW LEVEL SECURITY;
 
 -- Create policies
 CREATE POLICY "Users can manage their own profile" ON profiles
@@ -253,9 +308,34 @@ CREATE POLICY "Users can manage their own commands" ON custom_commands
 
 CREATE POLICY "Users can manage their own world state" ON world_states
   FOR ALL USING (auth.uid() = user_id);
+
+CREATE POLICY "Everyone can read challenges" ON challenges
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can manage their own world templates" ON world_templates
+  FOR ALL USING (auth.uid() = created_by);
+
+CREATE POLICY "Users can read public world templates" ON world_templates
+  FOR SELECT USING (is_public = true OR auth.uid() = created_by);
+
+CREATE POLICY "Users can manage their own agent scripts" ON agent_scripts
+  FOR ALL USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can manage their own LLM sessions" ON llm_sessions
+  FOR ALL USING (auth.uid() = user_id);
 ```
 
 3. Add your Supabase URL and anon key to `.env.local`
+
+### OpenAI Setup
+
+**REQUIRED** for advanced LLM features:
+
+1. Create an account at https://platform.openai.com
+2. Generate an API key in the API Keys section
+3. Add `VITE_OPENAI_API_KEY=your_key_here` to `.env.local`
+
+**Note**: Without OpenAI API, the game falls back to basic pattern matching for command parsing.
 
 ## 📝 Contributing
 
@@ -273,29 +353,30 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 Experience the Matrix. Build your world. Command your agents.
 
-### ✅ v2.2 Features Completed:
+### ✅ v2.5 Features Completed:
 
-- ✅ **Supabase Integration**: Full user authentication and data persistence
-- ✅ **LLM Command Parsing**: Natural language to game commands via OpenAI API
-- ✅ **Enhanced Agent AI**: New behaviors (scout, gather, guardArea) with obstacle avoidance
-- ✅ **Interactive World Objects**: Collectable data nodes, activatable terminals, blocking obstacles
-- ✅ **Real-time Command Validation**: Syntax checking with helpful error messages and warnings
-- ✅ **Matrix Audio System**: Terminal typing sounds, command feedback, and ambient audio
-- ✅ **Comprehensive Test Suite**: 80%+ coverage with Vitest and React Testing Library
+- ✅ **Advanced Natural Language Processing**: Multi-turn LLM conversations with session memory and context awareness
+- ✅ **AI-Generated Content**: Procedural world generation with seed-based algorithms and dynamic event injection
+- ✅ **Agent Programming**: Visual scripting interface with drag-and-drop logic blocks and flow control
+- ✅ **World Editor**: Complete drag-and-drop world builder with save/load functionality and template management
+- ✅ **Challenge System**: Mission-based progression with objectives, rewards, and achievement tracking
+- ✅ **Enhanced Database Schema**: Full Supabase integration for challenges, world templates, agent scripts, and LLM sessions
+- ✅ **Expanded UI**: New routes for /challenges, /builder, and /programming with intuitive interfaces
 
 ### 🔧 Setup Required:
 
-Some features require additional configuration:
+**CRITICAL**: v2.5 features require external service configuration:
 
-- ⚠️ **Supabase Database**: 
+- ⚠️ **Supabase Database** (REQUIRED):
     - Create a Supabase project at https://supabase.com
-    - Run the SQL schema provided in the setup section above
+    - Run the complete SQL schema provided above (includes new v2.5 tables)
     - Add your Supabase URL and anon key to `.env.local`
+    - Without this: No user accounts, challenges, world templates, or agent scripts
 
-- ⚠️ **OpenAI API**: 
+- ⚠️ **OpenAI API** (REQUIRED for advanced features):
     - Get an API key from https://platform.openai.com
     - Add `VITE_OPENAI_API_KEY=your_key` to `.env.local`
-    - Without this, the game uses pattern-matching fallback for command parsing
+    - Without this: No advanced LLM features, session memory, or context-aware parsing
 
 ---
 

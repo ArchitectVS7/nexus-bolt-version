@@ -1,7 +1,20 @@
-interface LLMResponse {
+export interface LLMResponse {
   command: string;
   confidence: number;
   explanation: string;
+  needsClarification?: boolean;
+  clarificationPrompt?: string;
+  sessionId?: string;
+}
+
+export interface LLMContext {
+  worldState?: Partial<GameState>;
+  recentCommands: string[];
+  activeChallenge?: Challenge;
+  agentStates?: Agent[];
+  worldEvents?: WorldEvent[];
+  userId?: string;
+  userId?: string;
 }
 
 interface CommandMapping {
@@ -36,18 +49,52 @@ const COMMAND_MAPPINGS: CommandMapping[] = [
 export class LLMCommandParser {
   private apiKey: string | null;
   private isEnabled: boolean;
+  private currentSession: string | null = null;
+  private sessionMemory: Map<string, any[]> = new Map();
+  private devMode: boolean = false;
+  private sessionContext: Map<string, LLMContext> = new Map();
 
   constructor() {
     this.apiKey = import.meta.env.VITE_OPENAI_API_KEY || null;
     this.isEnabled = !!this.apiKey;
+    this.devMode = import.meta.env.DEV || false;
   }
 
-  async parseCommand(naturalLanguage: string): Promise<LLMResponse | null> {
+  async parseCommand(
+    naturalLanguage: string, 
+    context?: Partial<LLMContext>,
+    sessionId?: string
+  ): Promise<LLMResponse | null> {
     if (!this.isEnabled) {
       return this.fallbackParse(naturalLanguage);
     }
 
+    // Set or create session
+    if (sessionId) {
+      this.currentSession = sessionId;
+    } else if (!this.currentSession) {
+      this.currentSession = `session_${Date.now()}`;
+    }
+
+    // Get session memory
+    const sessionHistory = this.sessionMemory.get(this.currentSession) || [];
+    
+    // Update session context
+    if (context) {
+      const existingContext = this.sessionContext.get(this.currentSession) || {};
+      this.sessionContext.set(this.currentSession, { ...existingContext, ...context });
+    }
+    
+    const fullContext = this.sessionContext.get(this.currentSession);
+
     try {
+      const systemPrompt = this.buildSystemPrompt(fullContext);
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        ...sessionHistory,
+        { role: 'user', content: naturalLanguage }
+      ];
+
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -56,29 +103,8 @@ export class LLMCommandParser {
         },
         body: JSON.stringify({
           model: 'gpt-3.5-turbo',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a command parser for a Matrix-style terminal game. Convert natural language to game commands.
-
-Available commands:
-- DeployAgent[count] location behavior (behaviors: patrol, scout, guard, gather, guardArea)
-- ScanArea x y radius
-- ListAgents
-- Status
-- ClearTerminal
-
-Locations: center, north, south, east, west, northeast, northwest, southeast, southwest, or coordinates like "25 25"
-Numbers should be extracted from text (e.g., "three" -> 3, "a few" -> 3, "several" -> 5)
-
-Respond with JSON: {"command": "exact_command", "confidence": 0.0-1.0, "explanation": "brief_explanation"}`
-            },
-            {
-              role: 'user',
-              content: naturalLanguage
-            }
-          ],
-          max_tokens: 150,
+          messages,
+          max_tokens: 200,
           temperature: 0.1
         })
       });
@@ -91,13 +117,137 @@ Respond with JSON: {"command": "exact_command", "confidence": 0.0-1.0, "explanat
       const content = data.choices[0]?.message?.content;
       
       if (content) {
-        return JSON.parse(content);
+        const result = JSON.parse(content);
+        
+        // Store in session memory
+        sessionHistory.push(
+          { role: 'user', content: naturalLanguage },
+          { role: 'assistant', content: content }
+        );
+        
+        // Keep only last 10 exchanges
+        if (sessionHistory.length > 20) {
+          sessionHistory.splice(0, sessionHistory.length - 20);
+        }
+        
+        this.sessionMemory.set(this.currentSession, sessionHistory);
+        
+        // Save session to Supabase if enabled
+        if (import.meta.env.VITE_SUPABASE_URL && fullContext?.userId) {
+          this.saveLLMSession(this.currentSession, sessionHistory, fullContext);
+        }
+        
+        // Log in dev mode
+        if (this.devMode) {
+          console.log('LLM Session:', this.currentSession);
+          console.log('Input:', naturalLanguage);
+          console.log('Output:', result);
+          console.log('Context:', context);
+        }
+        
+        return {
+          ...result,
+          sessionId: this.currentSession
+        };
       }
     } catch (error) {
       console.warn('LLM parsing failed, using fallback:', error);
     }
 
     return this.fallbackParse(naturalLanguage);
+  }
+
+  private async saveLLMSession(sessionId: string, messages: any[], context: LLMContext): Promise<void> {
+    try {
+      const { supabase } = await import('../lib/supabase');
+      if (!supabase) return;
+      
+      await supabase.from('llm_sessions').upsert({
+        id: sessionId,
+        user_id: context.userId || 'anonymous',
+        messages,
+        context: {
+          worldState: context.worldState,
+          recentCommands: context.recentCommands,
+          activeChallenge: context.activeChallenge
+        },
+        updated_at: new Date().toISOString()
+      });
+    } catch (error) {
+      console.warn('Failed to save LLM session:', error);
+    }
+  }
+
+  private buildSystemPrompt(context?: Partial<LLMContext>): string {
+    let prompt = `You are a command parser for a Matrix-style terminal game. Convert natural language to game commands.
+
+Available commands:
+- DeployAgent[count] location behavior (behaviors: patrol, scout, guard, gather, guardArea)
+- ScanArea x y radius
+- ListAgents
+- Status
+- ClearTerminal
+- StartChallenge "challenge_name"
+- SaveWorld "template_name"
+- LoadWorld "template_name"
+- GenerateWorld seed biome difficulty
+- ProgramAgent agent_id script_name
+
+Locations: center, north, south, east, west, northeast, northwest, southeast, southwest, or coordinates like "25 25"
+Numbers should be extracted from text (e.g., "three" -> 3, "a few" -> 3, "several" -> 5)`;
+
+    if (context) {
+      prompt += `\n\nCurrent Context:`;
+      
+      if (context.worldState) {
+        prompt += `\n- World Size: ${context.worldState.worldSize?.width}x${context.worldState.worldSize?.height}`;
+        prompt += `\n- Active Agents: ${context.agentStates?.length || 0}`;
+      }
+      
+      if (context.recentCommands?.length) {
+        prompt += `\n- Recent Commands: ${context.recentCommands.slice(-3).join(', ')}`;
+      }
+      
+      if (context.activeChallenge) {
+        prompt += `\n- Active Challenge: ${context.activeChallenge.title}`;
+      }
+      
+      if (context.worldEvents?.length) {
+        prompt += `\n- Recent Events: ${context.worldEvents.slice(-2).map(e => e.type).join(', ')}`;
+      }
+    }
+
+    prompt += `\n\nIf the command is ambiguous or needs clarification, set "needsClarification": true and provide a "clarificationPrompt".
+
+Respond with JSON: {"command": "exact_command", "confidence": 0.0-1.0, "explanation": "brief_explanation", "needsClarification": false, "clarificationPrompt": null}`;
+
+    return prompt;
+  }
+
+  clearSession(sessionId?: string): void {
+    const targetSession = sessionId || this.currentSession;
+    if (targetSession) {
+      this.sessionMemory.delete(targetSession);
+      this.sessionContext.delete(targetSession);
+    }
+    if (!sessionId) {
+      this.currentSession = null;
+    }
+  }
+
+  getSessionHistory(sessionId?: string): any[] {
+    const targetSession = sessionId || this.currentSession;
+    return targetSession ? this.sessionMemory.get(targetSession) || [] : [];
+  }
+
+  async getClarification(sessionId: string, response: string): Promise<LLMResponse | null> {
+    const session = sessionId || this.currentSession;
+    if (!session) return null;
+    
+    const history = this.sessionMemory.get(session) || [];
+    history.push({ role: 'user', content: response });
+    
+    return this.parseCommand(response, undefined, session);
   }
 
   private fallbackParse(input: string): LLMResponse | null {
@@ -112,7 +262,8 @@ Respond with JSON: {"command": "exact_command", "confidence": 0.0-1.0, "explanat
             return {
               command,
               confidence: 0.7,
-              explanation: `Matched pattern "${pattern}" to ${mapping.template}`
+              explanation: `Matched pattern "${pattern}" to ${mapping.template}`,
+              needsClarification: false
             };
           }
         }
@@ -171,6 +322,10 @@ Respond with JSON: {"command": "exact_command", "confidence": 0.0-1.0, "explanat
 
   isLLMEnabled(): boolean {
     return this.isEnabled;
+  }
+
+  setDevMode(enabled: boolean): void {
+    this.devMode = enabled;
   }
 }
 

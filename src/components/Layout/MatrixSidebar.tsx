@@ -9,7 +9,10 @@ import {
   User, 
   ChevronLeft,
   Activity,
-  Zap
+  Zap,
+  Trophy,
+  Edit,
+  Code
 } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 
@@ -21,6 +24,9 @@ const MatrixSidebar: React.FC = () => {
     { path: '/admin', icon: Settings, label: 'Admin', description: 'Command Builder' },
     { path: '/world', icon: Globe, label: 'World', description: 'Game Visualization' },
     { path: '/library', icon: Library, label: 'Library', description: 'Command Repository' },
+    { path: '/challenges', icon: Trophy, label: 'Challenges', description: 'Mission System' },
+    { path: '/builder', icon: Edit, label: 'Builder', description: 'World Editor' },
+    { path: '/programming', icon: Code, label: 'Programming', description: 'Agent Scripts' },
     { path: '/profile', icon: User, label: 'Profile', description: 'User Statistics' },
   ];
 

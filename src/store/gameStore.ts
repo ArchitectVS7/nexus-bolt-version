@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import { Agent, Command, GameState, TerminalLine, Notification, WorldObject } from '../types';
+import { Agent, Command, GameState, TerminalLine, Notification, WorldObject, Challenge, WorldEvent, WorldTemplate } from '../types';
 import { supabase, isSupabaseEnabled } from '../lib/supabase';
 import { audioManager } from '../lib/audio';
+import { worldGenerator } from '../lib/worldGenerator';
 
 interface GameStore {
   // Game State
@@ -15,6 +16,12 @@ interface GameStore {
   commands: Command[];
   customCommands: Command[];
   commandHistory: string[];
+  
+  // Challenges and Events
+  challenges: Challenge[];
+  activeChallenge: Challenge | null;
+  worldEvents: WorldEvent[];
+  worldTemplates: WorldTemplate[];
   
   // Notifications
   notifications: Notification[];
@@ -42,6 +49,14 @@ interface GameStore {
   saveToSupabase: () => Promise<void>;
   loadFromSupabase: () => Promise<void>;
   interactWithObject: (objectId: string) => void;
+  
+  // New v2.5 actions
+  startChallenge: (challengeId: string) => void;
+  completeObjective: (challengeId: string, objectiveId: string) => void;
+  generateWorld: (seed: string, biome: string, difficulty: number) => void;
+  triggerWorldEvent: (event: WorldEvent) => void;
+  saveWorldTemplate: (template: WorldTemplate) => void;
+  loadWorldTemplate: (templateId: string) => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -128,6 +143,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   ],
   customCommands: [],
   commandHistory: [],
+  
+  challenges: [],
+  activeChallenge: null,
+  worldEvents: [],
+  worldTemplates: [],
   
   notifications: [],
   
@@ -456,6 +476,97 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (scoreGain > 0) {
         audioManager.playSound('success', 0.3);
       }
+    }
+  },
+  
+  // New v2.5 actions
+  startChallenge: (challengeId) => set((state) => {
+    const challenge = state.challenges.find(c => c.id === challengeId);
+    if (challenge) {
+      return { activeChallenge: challenge };
+    }
+    return state;
+  }),
+  
+  completeObjective: (challengeId, objectiveId) => set((state) => ({
+    challenges: state.challenges.map(challenge => 
+      challenge.id === challengeId 
+        ? {
+            ...challenge,
+            objectives: challenge.objectives.map(obj =>
+              obj.id === objectiveId ? { ...obj, completed: true } : obj
+            )
+          }
+        : challenge
+    )
+  })),
+  
+  generateWorld: (seed, biome, difficulty) => {
+    const config = {
+      seed,
+      width: 50,
+      height: 50,
+      density: {
+        obstacles: 0.1,
+        datanodes: 0.05,
+        terminals: 0.02,
+        portals: 0.01
+      },
+      biome: biome as any,
+      difficulty
+    };
+    
+    const template = worldGenerator.generate(config);
+    
+    set((state) => ({
+      gameState: {
+        ...state.gameState,
+        objects: template.objects,
+        worldSize: template.size
+      }
+    }));
+    
+    get().addNotification({
+      type: 'success',
+      title: 'World Generated',
+      message: `New ${biome} world generated with seed: ${seed}`,
+      duration: 3000
+    });
+  },
+  
+  triggerWorldEvent: (event) => set((state) => {
+    const newEvents = [...state.worldEvents, event];
+    // Keep only last 10 events
+    if (newEvents.length > 10) {
+      newEvents.splice(0, newEvents.length - 10);
+    }
+    
+    return { worldEvents: newEvents };
+  }),
+  
+  saveWorldTemplate: (template) => set((state) => ({
+    worldTemplates: [...state.worldTemplates, template]
+  })),
+  
+  loadWorldTemplate: (templateId) => {
+    const state = get();
+    const template = state.worldTemplates.find(t => t.id === templateId);
+    
+    if (template) {
+      set((prevState) => ({
+        gameState: {
+          ...prevState.gameState,
+          objects: template.objects,
+          worldSize: template.size
+        }
+      }));
+      
+      get().addNotification({
+        type: 'success',
+        title: 'World Loaded',
+        message: `Loaded world template: ${template.name}`,
+        duration: 3000
+      });
     }
   }
 }));
