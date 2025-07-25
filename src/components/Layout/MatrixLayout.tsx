@@ -1,13 +1,24 @@
 import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
 import MatrixSidebar from './MatrixSidebar';
 import MatrixHeader from './MatrixHeader';
 import NotificationSystem from '../UI/NotificationSystem';
+import AuthModal from '../Auth/AuthModal';
 import { useGameStore } from '../../store/gameStore';
 
 const MatrixLayout: React.FC = () => {
   const location = useLocation();
-  const { sidebarCollapsed } = useGameStore();
+  const { sidebarCollapsed, setUser, loadFromSupabase } = useGameStore();
+  const { user, loading } = useAuth();
+  const [showAuthModal, setShowAuthModal] = React.useState(false);
+
+  React.useEffect(() => {
+    if (user) {
+      setUser(user);
+      loadFromSupabase();
+    }
+  }, [user, setUser, loadFromSupabase]);
 
   return (
     <div className="min-h-screen bg-neutral-black text-matrix-green font-mono">
@@ -36,6 +47,11 @@ const MatrixLayout: React.FC = () => {
       </div>
       
       <NotificationSystem />
+      
+      <AuthModal 
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+      />
     </div>
   );
 };

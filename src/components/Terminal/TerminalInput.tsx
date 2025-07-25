@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../../store/gameStore';
+import { useCommandValidation } from '../../hooks/useCommandValidation';
+import CommandValidator from './CommandValidator';
+import LLMCommandSuggestions from './LLMCommandSuggestions';
+import { audioManager } from '../../lib/audio';
 
 interface TerminalInputProps {
   value: string;
@@ -17,8 +21,11 @@ const TerminalInput: React.FC<TerminalInputProps> = ({
   disabled,
   placeholder
 }) => {
-  const { commands, customCommands, commandHistory } = useGameStore();
+  const { commands, customCommands, commandHistory, audioEnabled } = useGameStore();
+  const { validateCommand, validationResult } = useCommandValidation();
   const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
+  const [showLLMSuggestions, setShowLLMSuggestions] = useState(false);
   const [autocompleteOptions, setAutocompleteOptions] = useState<string[]>([]);
   const [selectedOption, setSelectedOption] = useState(0);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -28,6 +35,21 @@ const TerminalInput: React.FC<TerminalInputProps> = ({
 
   useEffect(() => {
     const trimmedValue = value.trim().toLowerCase();
+    
+    // Real-time validation
+    if (trimmedValue.length > 0) {
+      const validation = validateCommand(value);
+      setShowValidation(!validation.isValid || validation.warnings.length > 0);
+    } else {
+      setShowValidation(false);
+    }
+    
+    // Show LLM suggestions for natural language
+    const hasNaturalLanguage = /^[a-zA-Z\s]+$/.test(trimmedValue) && 
+                              trimmedValue.length > 5 && 
+                              !trimmedValue.includes('[') &&
+                              !allCommands.some(cmd => cmd.name.toLowerCase().startsWith(trimmedValue));
+    setShowLLMSuggestions(hasNaturalLanguage);
     
     if (trimmedValue.length > 0) {
       const matches = allCommands
@@ -48,6 +70,11 @@ const TerminalInput: React.FC<TerminalInputProps> = ({
   }, [value, allCommands]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Play keypress sound
+    if (audioEnabled && e.key.length === 1) {
+      audioManager.playSound('keypress', 0.1);
+    }
+    
     if (showAutocomplete) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -97,11 +124,25 @@ const TerminalInput: React.FC<TerminalInputProps> = ({
   const handleAutocompleteSelect = (option: string) => {
     onChange(option);
     setShowAutocomplete(false);
+    setShowLLMSuggestions(false);
     inputRef.current?.focus();
   };
 
   return (
     <div className="relative">
+      {/* Command Validation */}
+      <CommandValidator 
+        validation={validationResult}
+        isVisible={showValidation}
+      />
+      
+      {/* LLM Command Suggestions */}
+      <LLMCommandSuggestions
+        input={value}
+        onSuggestionSelect={handleAutocompleteSelect}
+        isVisible={showLLMSuggestions}
+      />
+      
       <input
         ref={inputRef}
         type="text"
@@ -120,7 +161,7 @@ const TerminalInput: React.FC<TerminalInputProps> = ({
 
       {/* Autocomplete Dropdown */}
       <AnimatePresence>
-        {showAutocomplete && (
+        {showAutocomplete && !showLLMSuggestions && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}

@@ -1,12 +1,14 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Wifi, Shield, Activity, Clock } from 'lucide-react';
+import { Wifi, Shield, Activity, Clock, User, LogOut, Volume2, VolumeX } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
+import { useAuth } from '../../hooks/useAuth';
 
 const MatrixHeader: React.FC = () => {
   const location = useLocation();
-  const { gameState, isExecuting } = useGameStore();
+  const { gameState, isExecuting, audioEnabled, toggleAudio } = useGameStore();
+  const { user, signOut } = useAuth();
   
   const getPageTitle = () => {
     switch (location.pathname) {
@@ -74,6 +76,37 @@ const MatrixHeader: React.FC = () => {
 
         {/* Status Indicators */}
         <div className="flex items-center space-x-6">
+          {/* User Info */}
+          {user && (
+            <div className="flex items-center space-x-2">
+              <User className="w-4 h-4 text-matrix-green" />
+              <span className="text-sm">
+                <span className="text-matrix-dim-green">User:</span>
+                <span className="text-matrix-green ml-1">{user.user_metadata?.username || user.email}</span>
+              </span>
+              <button
+                onClick={signOut}
+                className="p-1 rounded hover:bg-glow-green transition-colors text-matrix-dim-green hover:text-matrix-green"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+          
+          {/* Audio Toggle */}
+          <button
+            onClick={toggleAudio}
+            className="flex items-center space-x-2 p-1 rounded hover:bg-glow-green transition-colors"
+            title={audioEnabled ? 'Disable Audio' : 'Enable Audio'}
+          >
+            {audioEnabled ? (
+              <Volume2 className="w-4 h-4 text-matrix-green" />
+            ) : (
+              <VolumeX className="w-4 h-4 text-matrix-dim-green" />
+            )}
+          </button>
+          
           {/* Connection Status */}
           <div className="flex items-center space-x-2">
             <Wifi className="w-4 h-4 text-matrix-green" />

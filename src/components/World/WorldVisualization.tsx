@@ -75,6 +75,15 @@ const WorldVisualization: React.FC = () => {
       ctx.font = '12px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(getObjectSymbol(obj.type), x + cellSize/2, y + cellSize/2 + 4);
+      
+      // Add interaction indicator
+      if (obj.isCollectable || obj.isActivatable) {
+        ctx.strokeStyle = '#00CCFF';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.strokeRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+        ctx.setLineDash([]);
+      }
     });
 
     // Draw agents
@@ -119,9 +128,9 @@ const WorldVisualization: React.FC = () => {
 
   const getObjectColor = (type: string) => {
     switch (type) {
-      case 'wall': return '#666666';
-      case 'data': return '#00CCFF';
-      case 'terminal': return '#00FF41';
+      case 'obstacle': return '#666666';
+      case 'datanode': return '#00CCFF';
+      case 'terminalnode': return '#00FF41';
       case 'portal': return '#FF6B35';
       default: return '#444444';
     }
@@ -129,9 +138,9 @@ const WorldVisualization: React.FC = () => {
 
   const getObjectSymbol = (type: string) => {
     switch (type) {
-      case 'wall': return '█';
-      case 'data': return 'D';
-      case 'terminal': return 'T';
+      case 'obstacle': return '█';
+      case 'datanode': return 'D';
+      case 'terminalnode': return 'T';
       case 'portal': return 'P';
       default: return '?';
     }
@@ -163,6 +172,16 @@ const WorldVisualization: React.FC = () => {
     const clickedAgent = gameState.agents.find(agent => 
       agent.position.x === worldX && agent.position.y === worldY
     );
+
+    // Find object at this position
+    const clickedObject = gameState.objects.find(obj => 
+      obj.position.x === worldX && obj.position.y === worldY
+    );
+
+    if (clickedObject && (clickedObject.isCollectable || clickedObject.isActivatable)) {
+      const { interactWithObject } = useGameStore.getState();
+      interactWithObject(clickedObject.id);
+    }
 
     selectAgent(clickedAgent || null);
   };
