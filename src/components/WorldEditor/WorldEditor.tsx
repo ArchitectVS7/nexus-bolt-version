@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Save, Load, Trash2, Grid, Eye, Palette, Download, Upload, RotateCcw } from 'lucide-react';
+import { Save, Loader as Load, Trash2, Grid, Eye, Palette, Download, Upload, RotateCcw } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { WorldObject, WorldTemplate } from '../../types';
 
