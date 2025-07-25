@@ -6,6 +6,9 @@ import AdminPanel from './components/Admin/AdminPanel';
 import WorldVisualization from './components/World/WorldVisualization';
 import CommandLibrary from './components/Library/CommandLibrary';
 import UserProfile from './components/Profile/UserProfile';
+import ChallengeSystem from './components/Challenges/ChallengeSystem';
+import WorldEditor from './components/WorldEditor/WorldEditor';
+import VisualScriptEditor from './components/AgentProgramming/VisualScriptEditor';
 
 function App() {
   return (
@@ -18,6 +21,9 @@ function App() {
           <Route path="/world" element={<WorldVisualization />} />
           <Route path="/library" element={<CommandLibrary />} />
           <Route path="/profile" element={<UserProfile />} />
+          <Route path="/challenges" element={<ChallengeSystem />} />
+          <Route path="/builder" element={<WorldEditor />} />
+          <Route path="/programming" element={<VisualScriptEditor />} />
         </Route>
       </Routes>
     </Router>
