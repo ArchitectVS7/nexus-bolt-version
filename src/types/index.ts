@@ -509,31 +509,6 @@ You: Analyze world state, active challenges, suggest strategic next steps`;
       }
     }
 
-          const command = this.buildCommand(mapping, input);
-          if (command) {
-            return {
-              command,
-              confidence: 0.7,
-              explanation: `Matched pattern "${pattern}" to ${mapping.template}`,
-              needsClarification: false
-            };
-          }
-        }
-      }
-    }
-
-    return null;
-  }
-
-  private buildCommand(mapping: CommandMapping, input: string): string | null {
-    const lowercaseInput = input.toLowerCase();
-    let command = mapping.template;
-
-    // Extract numbers
-    const numbers = input.match(/\d+/g) || [];
-    const textNumbers = this.extractTextNumbers(input);
-    const allNumbers = [...numbers.map(n => parseInt(n)), ...textNumbers];
-
     // Extract locations
     const locations = ['center', 'north', 'south', 'east', 'west', 'northeast', 'northwest', 'southeast', 'southwest'];
     const foundLocation = locations.find(loc => lowercaseInput.includes(loc)) || 'center';
